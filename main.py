@@ -1,6 +1,5 @@
-from src.tools.tools import web_search, scrape_website
+from src.pipelines.pipeline import run_search_pipeline
 
-# output = web_search("Latest news on AI")
-# output = scrape_website.invoke("https://www.google.com")
+topic = "The impact of AI on jobs"
 
-# print(output)
+run_search_pipeline(topic)

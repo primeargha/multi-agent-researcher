@@ -1,3 +1,4 @@
+# Agents + writer/critic chains for the research system.
 from langchain.agents import create_agent
 from dotenv import load_dotenv
 from src.tools.tools import web_search, scrape_website
@@ -5,11 +6,13 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
+# Load API keys from .env
 load_dotenv()
 
-# model initialization
+# Shared LLM for all agents/chains (low temperature = more focused answers)
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
+# --- Search agent: find and rank URLs only ---
 SEARCH_AGENT_PROMPT = """You are the Search Agent in a multi-agent research system.
 
 Your only job is discovery and triage of sources. Another agent will scrape the URLs you recommend.
@@ -31,6 +34,7 @@ Rules:
 - Ground every recommendation in search tool results; do not invent URLs.
 """
 
+# --- Reader agent: scrape pages from search URLs ---
 READER_AGENT_PROMPT = """You are the Reader Agent in a multi-agent research system.
 
 Your only job is to scrape and extract content from URLs provided by the Search Agent.
@@ -56,6 +60,7 @@ Rules:
 
 
 def build_search_agent():
+    # Agent that can call web_search in a loop until it finishes.
     return create_agent(
         model=llm,
         tools=[web_search],
@@ -65,6 +70,7 @@ def build_search_agent():
 
 
 def build_reader_agent():
+    # Agent that can call scrape_website on URLs from search.
     return create_agent(
         model=llm,
         tools=[scrape_website],
@@ -73,7 +79,8 @@ def build_reader_agent():
     )
 
 
-# Writer agent (LCEL chain) — research comes from the Reader Agent's reading pack
+# --- Writer: no tools — just a prompt → LLM → text chain ---
+# {topic} and {research} get filled when you .invoke(...)
 WRITER_PROMPT = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -108,10 +115,11 @@ Write the research brief now.""",
     ),
 ])
 
-# lcel chain
+# Pipe: fill prompt → call LLM → return plain string
 writer_chain = WRITER_PROMPT | llm | StrOutputParser()
 
-# Critic agent (LCEL chain) — reviews Writer draft against Reader research pack
+# --- Critic: checks the draft, then returns a better brief ---
+# Needs topic + research (from reader) + draft (from writer)
 CRITIC_PROMPT = ChatPromptTemplate.from_messages([
     (
         "system",
@@ -155,4 +163,5 @@ Review the draft and return the critique plus revised brief.""",
     ),
 ])
 
+# Same pipe style as writer
 critic_chain = CRITIC_PROMPT | llm | StrOutputParser()
